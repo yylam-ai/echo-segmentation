@@ -1,5 +1,6 @@
 import os
 import torch
+import numpy as np
 from models import load_model
 from datasets import load_dataset, datas
 import argparse
@@ -16,7 +17,11 @@ def load_trained_model(weights_filename: str = None, load_dataset_from_checkpoin
     ds = None
     if weights_filename is not None and os.path.exists(weights_filename):
         print("loading file %s.." % weights_filename)
-        checkpoint = torch.load(weights_filename)
+        
+        # THIS IS THE CHANGE: Add np.generic to the list of allowed types.
+        with torch.serialization.safe_globals([argparse.Namespace, np.generic]):
+            checkpoint = torch.load(weights_filename)
+
         print('epoch is %d' % checkpoint['epoch'])
         if 'cfg' in checkpoint:
             print(checkpoint['cfg'])
@@ -47,14 +52,22 @@ def load_trained_model(weights_filename: str = None, load_dataset_from_checkpoin
 
 
 def save_model(filename: str, epoch: int, model: torch.nn.Module, cfg: CfgNode,
-               current_train_loss: float, current_val_loss: float, best_val_metric: float, hostname: str) -> None:
+               current_train_loss: float, current_val_loss: float, best_val_metric: Union[float, Dict], hostname: str) -> None:
+    
+    # Ensure metrics are standard Python floats
+    save_metric = best_val_metric
+    if isinstance(best_val_metric, dict):
+        save_metric = {k: float(v) for k, v in best_val_metric.items()}
+    else:
+        save_metric = float(best_val_metric)
+
     torch.save({
         'model_state_dict': model.state_dict(),
-        'cfg': cfg,
+        'cfg': cfg, # For even better practice, consider saving cfg.dump() as a string
         'epoch': epoch,
-        'best_val_metric': best_val_metric,
-        'current_train_loss': current_train_loss,
-        'current_val_loss': current_val_loss,
+        'best_val_metric': save_metric, # <-- Use the sanitized metric
+        'current_train_loss': float(current_train_loss), # <-- Cast to float
+        'current_val_loss': float(current_val_loss), # <-- Cast to float
         'hostname': hostname,
         'weights_saved_to': filename,
     }, filename)

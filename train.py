@@ -19,7 +19,7 @@ from optimizers import load_optimizer
 from utils.utils_files import better_hparams
 from config.defaults import cfg_costum_setup, default_argument_parser, get_run_id,convert_to_dict,create_tensorboard_run_dict
 
-os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
+# os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 
 logs_dir = CONST.STORAGE_DIR
 
@@ -51,7 +51,7 @@ def train(cfg):
     else:
         device = torch.device("cpu")
         print("Using CPU")
-    
+        
     is_gpu = device.type in ['cuda', 'mps']
     if device.type == 'cuda':
         torch.backends.cudnn.deterministic = True

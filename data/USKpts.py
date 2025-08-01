@@ -212,4 +212,3 @@ class USKpts(data.Dataset):
             print("Cardiac contour is shown in {}".format(print_output_filename))
 
         return fig
-

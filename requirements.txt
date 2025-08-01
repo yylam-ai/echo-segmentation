@@ -11,3 +11,5 @@ scipy
 tensorboard
 tqdm
 fvcore
+albumentations
+pydicom
