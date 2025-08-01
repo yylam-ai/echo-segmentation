@@ -1,0 +1,13 @@
+matplotlib
+numpy
+opencv-python
+pandas
+pillow
+torch==2.1
+torchvision==0.10.0
+scikit-image
+scikit-learn
+scipy
+tensorboard
+tqdm
+fvcore
