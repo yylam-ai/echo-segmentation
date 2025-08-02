@@ -1,6 +1,7 @@
 import os
 import torch
 import argparse
+import pickle
 import numpy as np
 from PIL import Image
 from torch.utils.data import DataLoader
@@ -38,13 +39,34 @@ def eval_trained_model(model: torch.nn.Module, cfg: CfgNode, ds: datas,
                                               pin_memory=True
                                               )
 
-    # run test:
-    test_losses, test_outputs, test_inputs = validate(mode='test',
-                                                      epoch=1,
-                                                      loader=testloader,
-                                                      model=model,
-                                                      device=device,
-                                                      criterion=None)
+    # # run test:
+    # test_losses, test_outputs, test_inputs = validate(mode='test',
+    #                                                   epoch=1,
+    #                                                   loader=testloader,
+    #                                                   model=model,
+    #                                                   device=device,
+    #                                                   criterion=None)
+    # # safe results
+
+    # results_to_save = {
+    #     'losses': test_losses,
+    #     'outputs': test_outputs,
+    #     'inputs': test_inputs
+    # }
+
+    # # Open a file in binary write mode ('wb')
+    # with open('test_results.pkl', 'wb') as f:
+    #     pickle.dump(results_to_save, f)
+
+    # load results
+    with open('test_results.pkl', 'rb') as f:
+        loaded_results = pickle.load(f)
+
+    test_losses = loaded_results['losses']
+    test_outputs = loaded_results['outputs']
+    test_inputs = loaded_results['inputs']
+    print("Results loaded successfully!")
+
     test_loss = test_losses["main"].avg
     dataset_info = cfg.EVAL.DATASET
     out_directory = os.path.join(basedir, "{}_eval_on_{}/".format(basename, dataset_info))
@@ -152,7 +174,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model, cfg_model, _ = load_trained_model(weights_filename=cfg_eval.EVAL.WEIGHTS)
     cfg = overwrite_eval_cfg(cfg_model,cfg_eval)
-
+    
     model = model.to(device)
     basedir = os.path.dirname(cfg.EVAL.WEIGHTS)
     basename = os.path.splitext(os.path.basename(cfg.EVAL.WEIGHTS))[0]

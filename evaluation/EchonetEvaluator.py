@@ -280,9 +280,25 @@ class EchonetEvaluator(DatasetEvaluator):
     def _plot_kpts_single_frame(self, fig, data_path_from_root, keypoints_prediction):
         datapoint_index = self._dataset.img_list.index(data_path_from_root)
         data = self._dataset.get_img_and_kpts(datapoint_index)
+        
         img = data["img"]
         keypoints = data["kpts"]
-        # normalize:
+
+        # --- START OF FIX ---
+        # If image data is 4D (H, W, C, num_frames), select the first frame.
+        if img.ndim == 4:
+            img = img[:, :, :, 0]
+
+        # If ground truth keypoints data is 3D (num_kpts, 2, num_frames), select the first frame.
+        if keypoints.ndim == 3:
+            keypoints = keypoints[:, :, 0]
+            
+        # Do the same for the predicted keypoints.
+        if keypoints_prediction.ndim == 3:
+            keypoints_prediction = keypoints_prediction[:, :, 0]
+        # --- END OF FIX ---
+        
+        # The rest of the function now works correctly with a 3D image and 2D keypoint arrays.
         keypoints = self._dataset.normalize_pose(keypoints, img)
         img = cv2.resize(img, dsize=(300, 300), interpolation=cv2.INTER_AREA)
         keypoints_prediction = self._dataset.denormalize_pose(keypoints_prediction, img)
@@ -293,20 +309,7 @@ class EchonetEvaluator(DatasetEvaluator):
 
         #prediction_text = "Keypoints err: {:.2f}".format(np.mean(dist_pred_gt_kpts[img_index]))
         return fig
-
-    def _plot_navigation_histograms(self, towards_target: np.ndarray) -> plt.Figure:
-        fig, axs = plt.subplots(2, 3, figsize=(18, 10))
-        metrics = ['x[mm]', 'y[mm]', 'z[mm]', 'roll[\u00b0]', 'pitch[\u00b0]', 'yaw[\u00b0]']
-        positive_move = towards_target >= 0
-        mean_positive_move_per_coordinate = np.mean(positive_move, axis=0) * 100
-        for rr in range(2):
-            for cc in range(3):
-                coordinate_index = cc + rr * 3
-                axs[rr, cc].hist(towards_target[:, coordinate_index])
-                axs[rr, cc].set_title("{}, positive move in {:.1f}% of frames".format(metrics[coordinate_index],
-                                                                                      mean_positive_move_per_coordinate[coordinate_index]))
-        return fig
-
+    
     def _plot_ef_scatters(self, ef: np.ndarray, ef_prediction: np.ndarray) -> plt.Figure:
         fig, axs = plt.subplots(2, 2, figsize=(18, 18))
         metrics = ['%', '%']

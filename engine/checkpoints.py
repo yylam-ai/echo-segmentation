@@ -20,7 +20,7 @@ def load_trained_model(weights_filename: str = None, load_dataset_from_checkpoin
         
         # THIS IS THE CHANGE: Add np.generic to the list of allowed types.
         with torch.serialization.safe_globals([argparse.Namespace, np.generic]):
-            checkpoint = torch.load(weights_filename)
+            checkpoint = torch.load(weights_filename, weights_only=False)
 
         print('epoch is %d' % checkpoint['epoch'])
         if 'cfg' in checkpoint:

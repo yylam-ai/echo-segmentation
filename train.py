@@ -40,7 +40,6 @@ def train(cfg):
     np.random.seed(cfg.SEED)
     hostname = socket.getfqdn()
     run_id = get_run_id()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if torch.backends.mps.is_available() and torch.backends.mps.is_built():
         device = torch.device("mps")
@@ -179,7 +178,7 @@ def train(cfg):
                 if val_loss < best_val_loss:
                     filename = os.path.join(log_folder, 'weights_{}_best_loss.pth'.format(basename))
                     best_val_loss = val_loss
-                    save_model(filename, epoch, model, args, train_loss, val_loss, best_val_metric, hostname)
+                    save_model(filename, epoch, model, cfg, train_loss, val_loss, best_val_metric, hostname)
                     print("Saved at loss {:.5f}\n".format(val_loss))
                     writer.add_scalar('BestVal/Loss', best_val_loss, epoch)
 

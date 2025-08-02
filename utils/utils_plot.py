@@ -1,3 +1,4 @@
+# utils_plot.py
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
@@ -48,6 +49,9 @@ def plot_kpts_pred_and_gt(fig, img, gt_kpts=None, pred_kpts=None, kpts_info=[], 
     interpolation_step_size = 0.001  # 0.01
     unew = np.arange(0, 1.00, interpolation_step_size)
 
+    gt_interpolate = None
+    pred_interpolate = None
+
     if gt_kpts is not None:
         img = draw_kpts(img=img, kpts=gt_kpts,
                         kpts_connections=kpts_info["connections"],
@@ -56,8 +60,13 @@ def plot_kpts_pred_and_gt(fig, img, gt_kpts=None, pred_kpts=None, kpts_info=[], 
         if closed_contour:
             gt_kpts = np.concatenate((gt_kpts, gt_kpts[:1, :]), axis=0)
         if len(kpts_info['names']) > 3:
-            gt_tck, _ = interpolate.splprep([gt_kpts[:, 0], gt_kpts[:, 1]], s=0)
-            gt_interpolate = interpolate.splev(unew, gt_tck)
+            try:
+                gt_tck, _ = interpolate.splprep([gt_kpts[:, 0], gt_kpts[:, 1]], s=0)
+                gt_interpolate = interpolate.splev(unew, gt_tck)
+            except ValueError:
+                # Silently ignore if spline creation fails for GT
+                pass
+
 
     if pred_kpts is not None:
         img = draw_kpts(img=img, kpts=pred_kpts,
@@ -67,8 +76,17 @@ def plot_kpts_pred_and_gt(fig, img, gt_kpts=None, pred_kpts=None, kpts_info=[], 
         if closed_contour:
             pred_kpts = np.concatenate((pred_kpts, pred_kpts[:1,:]), axis=0)
         if len(kpts_info['names']) > 3:
-            pred_tck, _ = interpolate.splprep([pred_kpts[:, 0], pred_kpts[:, 1]], s=0)
-            pred_interpolate = interpolate.splev(unew, pred_tck)
+            # --- START OF FIX ---
+            # Wrap spline creation in a try-except block to handle invalid prediction data
+            try:
+                pred_tck, _ = interpolate.splprep([pred_kpts[:, 0], pred_kpts[:, 1]], s=0)
+                pred_interpolate = interpolate.splev(unew, pred_tck)
+            except (ValueError, TypeError):
+                # If spline creation fails (e.g., duplicate points), just skip drawing the spline.
+                # The raw keypoints from draw_kpts will still be visible.
+                pred_interpolate = None
+            # --- END OF FIX ---
+
 
     # option 1: clean img + kpts_img
     ax = fig.add_subplot(1, 3, 1)
@@ -77,9 +95,9 @@ def plot_kpts_pred_and_gt(fig, img, gt_kpts=None, pred_kpts=None, kpts_info=[], 
     #
     ax = fig.add_subplot(1, 3, 2)
     ax.imshow(clean_img)
-    if gt_kpts is not None and len(kpts_info['names']) > 3:
+    if gt_interpolate is not None:
         ax.scatter(gt_interpolate[0], gt_interpolate[1], marker='.', c='green', s=2)
-    if pred_kpts is not None and len(kpts_info['names']) > 3:
+    if pred_interpolate is not None:
         ax.scatter(pred_interpolate[0], pred_interpolate[1], marker='.', c='yellow', s=2) # fixme: change color back to 'white'
     ax.set_axis_off()
     #
@@ -134,22 +152,6 @@ def plot_inference_movie(test_movie, test_movie_pred_kpts, input_size, metric_na
 
     anim = animation.FuncAnimation(fig, animate, frames=test_movie.shape[0], blit=False)
     return anim
-
-# def plot_test_img2type(fig, filenames, pred_label, gt_label):
-#     # plot:
-#     num_examples_to_plot = 16
-#
-#     for indx in range(min(len(filenames), num_examples_to_plot)):
-#         ax = fig.add_subplot(4, 4, indx + 1)
-#         img = cv2.imread(filenames[indx])
-#         img = cv2.resize(img, (100, 100))
-#         ax.imshow(img)
-#         ax.set_axis_off()
-#         ax.set_title('pr:%d, gt:%d' % (pred_label[indx], gt_label[indx]), fontsize=40)
-#         #suptitle('test title', fontsize=20)
-#
-#     return fig
-
 
 def plot_grid(frames: List, labels: List, thumbnail_size: int = 30) -> Image:
     """ Plot grid of images and labels """
