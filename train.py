@@ -85,7 +85,7 @@ def train(cfg):
     # if resume training:
     if (cfg.TRAIN.WEIGHTS is not None) and (os.path.exists(cfg.TRAIN.WEIGHTS)):
          print("loading weights {}..".format(cfg.TRAIN.WEIGHTS))
-         checkpoint = torch.load(cfg.TRAIN.WEIGHTS)
+         checkpoint = torch.load(cfg.TRAIN.WEIGHTS, weights_only=False)
          model.load_state_dict(checkpoint['model_state_dict'])
     # Set training parameters:
     class_weights = torch.Tensor([1]*(1 + cfg.NUM_FRAMES));  class_weights[0] = 0.1;   class_weights /= len(class_weights)
@@ -121,7 +121,7 @@ def train(cfg):
     print("Training in batches of size {}..".format(cfg.TRAIN.BATCH_SIZE))
     print('Training on machine name {}..'.format(hostname))
     print("Using data augmentation type {} for {:.2f}% of the input data".format(cfg.AUG.METHOD, 100 * cfg.AUG.PROB))
-    evaluator = EchonetEvaluator(dataset=ds.valset, output_dir=None, verbose=False)
+    
     with tqdm(total=cfg.TRAIN.EPOCHS) as pbar_main:
         for epoch in range(1, cfg.TRAIN.EPOCHS+1):
             pbar_main.update()
@@ -169,6 +169,7 @@ def train(cfg):
                 #     mEfERR = np.mean(dist_pred_gt_ef)
                 #     writer.add_scalar('EfErr/Val_EfERR', mEfERR, epoch)
 
+                evaluator = EchonetEvaluator(dataset=ds.valset, output_dir=None, verbose=False)
                 evaluator.process(val_inputs, val_outputs)
                 eval_metrics = evaluator.evaluate()
                 for task in ['ef', 'sd', 'kpts']:

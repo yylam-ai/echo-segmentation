@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import pickle
 from utils.utils_plot import plot_inference_movie
 import torch
 from typing import List, Dict, Tuple
@@ -61,8 +62,10 @@ def seq2ef(model: torch.nn, data: List, device: torch.device) -> Dict:
 def img2kpts(model: torch.nn, data: List, device: torch.device) -> Dict:
 
     imgs = data[0].to(device)
+    # print('images shape:', imgs.shape)
     model.to(device)
     kpts_pred = model(imgs)
+    # print("kpts_pred shape:", kpts_pred.shape)
     outputs = {"kpts_pred": kpts_pred, "imgs": imgs}
 
     return outputs

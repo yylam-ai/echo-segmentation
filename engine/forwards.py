@@ -19,10 +19,20 @@ def img2kpts(model: torch.nn, data: List, criterion: torch.nn, device: torch.dev
     imgs, kpts = data[0].to(device),  data[1].to(device)
 
     loss, reported_loss = None, 0.0
+    # print("images shape:", imgs.shape)
     kpts_pred = model(imgs)
+    # print("kpts pred shape:", kpts_pred.shape)
+    # print("kpts_pred:", kpts_pred)
+    # print("kpts:", kpts)
+    
     if criterion is not None:
         loss = criterion(kpts_pred, kpts)
         reported_loss = loss.item()
+
+    # print("loss:", loss)
+    # print("reported los:", reported_loss)
+    import time
+    time.sleep(60)
 
     outputs = {"kpts_pred": kpts_pred, "kpts_gt": kpts, "imgs": imgs}
     losses = {"loss": loss, "reported_loss": reported_loss}

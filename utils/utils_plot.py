@@ -52,6 +52,8 @@ def plot_kpts_pred_and_gt(fig, img, gt_kpts=None, pred_kpts=None, kpts_info=[], 
     gt_interpolate = None
     pred_interpolate = None
 
+    print("gt_kpts:", gt_kpts)
+    print("pred_kpts:", pred_kpts)
     if gt_kpts is not None:
         img = draw_kpts(img=img, kpts=gt_kpts,
                         kpts_connections=kpts_info["connections"],
@@ -71,7 +73,7 @@ def plot_kpts_pred_and_gt(fig, img, gt_kpts=None, pred_kpts=None, kpts_info=[], 
     if pred_kpts is not None:
         img = draw_kpts(img=img, kpts=pred_kpts,
                         kpts_connections=kpts_info["connections"],
-                        colors_pts=kpts_info['colors'],
+                        colors_pts=(255,0,0),
                         color_connection=[255, 255, 255])
         if closed_contour:
             pred_kpts = np.concatenate((pred_kpts, pred_kpts[:1,:]), axis=0)

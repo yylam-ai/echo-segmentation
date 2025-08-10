@@ -250,15 +250,45 @@ def transform_image_sequence_to_tensor(sequence: np.array, device:torch.device) 
 
 def transform_image_to_tensor(image:np.array, image_size:int = 112) -> torch.Tensor:
     """
-
+    Transforms a single image from a NumPy array to a PyTorch tensor,
+    handling potential (C, H, W) input format.
     """
     basic_transform = torch_transforms.Compose([
         torch_transforms.ToTensor(),
         torch_transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-    image = Image.fromarray(np.uint8(image)).convert('RGB') # channel must be last
-    image = image.resize((image_size,image_size), resample=0)
+
+    # PIL.Image.fromarray expects (H, W, C) or (H, W) format.
+    # The input `image` is likely in (C, H, W) format.
+    # We check if the array is 3D and if the first dimension is small (likely channels).
+    if image.ndim == 3 and image.shape[0] < image.shape[2] and image.shape[0] < image.shape[1]:
+        image = image.transpose(1, 2, 0)
+
+    # The comment confirms the requirement: channel must be last.
+    image = Image.fromarray(np.uint8(image)).convert('RGB')
+    image = image.resize((image_size, image_size), resample=Image.NEAREST) # Use Image.NEAREST or another valid resample filter
     image = basic_transform(image)
     return image
+
+# REMOVED the first (now redundant) definition of transform_image_sequence_to_tensor
+
+# CORRECTED and FINAL version of transform_image_sequence_to_tensor
+# def transform_image_sequence_to_tensor(sequence:np.array, device:torch.device, image_size:int = 112) -> torch.Tensor:
+#     """
+#     Transforms a sequence of images from a NumPy array to a PyTorch tensor.
+#     """
+#     # Use a list comprehension for a cleaner and more efficient implementation
+#     images_list = [transform_image_to_tensor(sequence[idx], image_size) for idx in range(len(sequence))]
+    
+#     # torch.stack will create a new dimension, resulting in (N, C, H, W)
+#     images = torch.stack(images_list, dim=0)
+
+#     # The permutation from the original code seems incorrect for standard models.
+#     # torch.stack already produces the desired (N, C, H, W) format.
+#     # If your model specifically requires (N, C, H, W), the following permute is not needed.
+#     # If your model expects (C, N, H, W), you would use: images = images.permute(1, 0, 2, 3)
+#     # The original permute(0, 1, 2, 3) does nothing. I am removing it.
+    
+#     return images.to(device)
 
 def transform_image_sequence_to_tensor(sequence:np.array, device:str, image_size:int = 112) -> torch.Tensor:
     """

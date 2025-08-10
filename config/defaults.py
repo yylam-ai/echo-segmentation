@@ -48,7 +48,7 @@ _C.TRAIN.WEIGHTS = None
 _C.DATA_LOADER = CfgNode()
 
 # Number of data loader workers per training process.
-_C.DATA_LOADER.NUM_WORKERS = 8
+_C.DATA_LOADER.NUM_WORKERS = 0
 
 # Load data to pinned host memory.
 _C.DATA_LOADER.PIN_MEMORY = True
@@ -117,7 +117,7 @@ _C.EVAL.WEIGHTS = ''
 # Batch size during evaluation
 _C.EVAL.BATCH_SIZE = 4
 # Number of data loader workers per training process.
-_C.EVAL.NUM_WORKERS = 8
+_C.EVAL.NUM_WORKERS = 0
 # how many example images to plot
 _C.EVAL.EXAMPLES_TO_PLOT = 10
 # mode to execute the evaluation ['normal', 'sliding window']

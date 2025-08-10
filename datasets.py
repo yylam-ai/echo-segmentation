@@ -28,6 +28,7 @@ class datas(object):
         self.trainset = self.load_train(train_filenames_list)
         self.valset = self.load_test(val_filenames_list)
         self.testset = self.load_test(test_filenames_list)
+        # print('test_filenames_list:', test_filenames_list)
 
     def create_kpts_info(self, num_kpts: int, closed_contour: bool) -> Dict:
         kpts_info = {'names':[], 'connections':[], 'colors':[]}

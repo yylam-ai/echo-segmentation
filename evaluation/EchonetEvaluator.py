@@ -169,6 +169,7 @@ class EchonetEvaluator(DatasetEvaluator):
                                          keypoints_prediction=keypoints_prediction,
                                          sd_prediction=sd_prediction)
             else:
+                prediction["data_path_from_root"] = '0X1BDEEC24D5FC570C_93.png'
                 fig = self._plot_kpts_single_frame(fig, data_path_from_root=prediction["data_path_from_root"],
                                                    keypoints_prediction=prediction["keypoints_prediction"])
             plot_filename = "{}.jpg".format(os.path.splitext(prediction["data_path_from_root"])[0].replace("/", "_"))
@@ -283,6 +284,7 @@ class EchonetEvaluator(DatasetEvaluator):
         
         img = data["img"]
         keypoints = data["kpts"]
+        print("keypoints:", keypoints)
 
         # --- START OF FIX ---
         # If image data is 4D (H, W, C, num_frames), select the first frame.
@@ -304,6 +306,7 @@ class EchonetEvaluator(DatasetEvaluator):
         keypoints_prediction = self._dataset.denormalize_pose(keypoints_prediction, img)
         keypoints = self._dataset.denormalize_pose(keypoints, img)
 
+        print("keypoints_prediction:", keypoints_prediction)
         plot_kpts_pred_and_gt(fig, img, gt_kpts=keypoints, pred_kpts=keypoints_prediction,
                               kpts_info=self._dataset.kpts_info, closed_contour=self._dataset.kpts_info['closed_contour'])
 

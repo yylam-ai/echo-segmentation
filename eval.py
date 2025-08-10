@@ -40,12 +40,12 @@ def eval_trained_model(model: torch.nn.Module, cfg: CfgNode, ds: datas,
                                               )
 
     # # run test:
-    # test_losses, test_outputs, test_inputs = validate(mode='test',
-    #                                                   epoch=1,
-    #                                                   loader=testloader,
-    #                                                   model=model,
-    #                                                   device=device,
-    #                                                   criterion=None)
+    test_losses, test_outputs, test_inputs = validate(mode='test',
+                                                      epoch=1,
+                                                      loader=testloader,
+                                                      model=model,
+                                                      device=device,
+                                                      criterion=None)
     # # safe results
 
     # results_to_save = {
@@ -59,13 +59,15 @@ def eval_trained_model(model: torch.nn.Module, cfg: CfgNode, ds: datas,
     #     pickle.dump(results_to_save, f)
 
     # load results
-    with open('test_results.pkl', 'rb') as f:
-        loaded_results = pickle.load(f)
+    # with open('test_results.pkl', 'rb') as f:
+    #     loaded_results = pickle.load(f)
 
-    test_losses = loaded_results['losses']
-    test_outputs = loaded_results['outputs']
-    test_inputs = loaded_results['inputs']
-    print("Results loaded successfully!")
+    # test_losses = loaded_results['losses']
+    # test_outputs = loaded_results['outputs']
+    # test_inputs = loaded_results['inputs']
+    # print("Results loaded successfully!")
+
+    # print('test_outputs:', test_outputs)
 
     test_loss = test_losses["main"].avg
     dataset_info = cfg.EVAL.DATASET
