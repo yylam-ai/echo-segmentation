@@ -144,7 +144,7 @@ class kpts_decoder(nn.Module):
         return x
 
 class CNN_GCN(nn.Module):
-    def __init__(self, kpt_channels, gcn_channels, backbone=18, num_kpts=8, is_gpu=True, device=torch.device("cpu")):
+    def __init__(self, kpt_channels, gcn_channels, backbone='mobilenet2', num_kpts=8, is_gpu=True, device=torch.device("cpu")):
 
         super(CNN_GCN, self).__init__()
 

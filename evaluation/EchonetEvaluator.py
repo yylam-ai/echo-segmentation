@@ -169,7 +169,6 @@ class EchonetEvaluator(DatasetEvaluator):
                                          keypoints_prediction=keypoints_prediction,
                                          sd_prediction=sd_prediction)
             else:
-                prediction["data_path_from_root"] = '0X1BDEEC24D5FC570C_93.png'
                 fig = self._plot_kpts_single_frame(fig, data_path_from_root=prediction["data_path_from_root"],
                                                    keypoints_prediction=prediction["keypoints_prediction"])
             plot_filename = "{}.jpg".format(os.path.splitext(prediction["data_path_from_root"])[0].replace("/", "_"))

@@ -66,6 +66,7 @@ def load_dataset(ds_name: str, input_transform: A.core.composition.Compose = Non
     if hasattr(CONST, 'US_MultiviewData_MASTER'):
         copy_train_data(master_root_path=CONST.US_MultiviewData_MASTER, host_root_path=us_data_folder, folder_path_from_root="preprocessed/40/")
 
+    print('ds_name:', ds_name)
 
     if ds_name == 'apical':     # 427 + 107 = 534 examples
         img_dirname = os.path.join(us_data_folder,  "apical/frames/")  #"/shared-data5/MultiView/apical/movies/"  #"/shared-data5/MultiView/apical/frames/"
@@ -137,6 +138,65 @@ def load_dataset(ds_name: str, input_transform: A.core.composition.Compose = Non
         frame_selection_mode = 'all'#'edToEs'
         nb_classes, closed_contour = 40, False
 
+    elif ds_name == 'HMC_QU_A2C': 
+        img_dirname = os.path.join(us_data_folder, "preprocessed_kpts/frames/")
+        anno_dirname = os.path.join(us_data_folder, "preprocessed_kpts/annotations_v2/")
+        loader_func = USKptsNPZ
+        train_filenames_list = 'complete_HMC_QU/A2C/preprocessed_kpts/filenames/A2C_train_filenames.txt'
+        val_filenames_list = 'complete_HMC_QU/A2C/preprocessed_kpts/filenames/A2C_val_filenames.txt'
+        test_filenames_list = 'complete_HMC_QU/A2C/preprocessed_kpts/filenames/A2C_test_filenames.txt'
+        frame_selection_mode = None
+        nb_classes, closed_contour = 3, False
+
+    elif ds_name == 'HMC_QU_A4C': 
+        img_dirname = os.path.join(us_data_folder, "preprocessed_kpts/frames/")
+        anno_dirname = os.path.join(us_data_folder, "preprocessed_kpts/annotations_v2/")
+        loader_func = USKptsNPZ
+        train_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_train_filenames.txt'
+        val_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_val_filenames.txt'
+        test_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_test_filenames.txt'
+        frame_selection_mode = None
+        nb_classes, closed_contour = 3, False
+    
+    elif ds_name == 'HMC_QU_A2C_30': 
+        img_dirname = os.path.join(us_data_folder, "preprocessed_kpts/frames/")
+        anno_dirname = os.path.join(us_data_folder, "preprocessed_kpts/annotations_v3/")
+        loader_func = USKptsNPZ
+        train_filenames_list = 'complete_HMC_QU/A2C/preprocessed_kpts/filenames/A2C_train_filenames.txt'
+        val_filenames_list = 'complete_HMC_QU/A2C/preprocessed_kpts/filenames/A2C_val_filenames.txt'
+        test_filenames_list = 'complete_HMC_QU/A2C/preprocessed_kpts/filenames/A2C_test_filenames.txt'
+        frame_selection_mode = None
+        nb_classes, closed_contour = 30, False
+
+    elif ds_name == 'HMC_QU_A4C_30': 
+        img_dirname = os.path.join(us_data_folder, "preprocessed_kpts/frames/")
+        anno_dirname = os.path.join(us_data_folder, "preprocessed_kpts/annotations_v3/")
+        loader_func = USKptsNPZ
+        train_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_train_filenames.txt'
+        val_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_val_filenames.txt'
+        test_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_test_filenames.txt'
+        frame_selection_mode = None
+        nb_classes, closed_contour = 30, False
+    
+    elif ds_name == 'HMC_QU_A2C_48': 
+        img_dirname = os.path.join(us_data_folder, "preprocessed_kpts/frames/")
+        anno_dirname = os.path.join(us_data_folder, "preprocessed_kpts/annotations_48/")
+        loader_func = USKptsNPZ
+        train_filenames_list = 'complete_HMC_QU/A2C/preprocessed_kpts/filenames/A2C_train_filenames.txt'
+        val_filenames_list = 'complete_HMC_QU/A2C/preprocessed_kpts/filenames/A2C_val_filenames.txt'
+        test_filenames_list = 'complete_HMC_QU/A2C/preprocessed_kpts/filenames/A2C_test_filenames.txt'
+        frame_selection_mode = None
+        nb_classes, closed_contour = 48, False
+
+    elif ds_name == 'HMC_QU_A4C_48': 
+        img_dirname = os.path.join(us_data_folder, "preprocessed_kpts/frames/")
+        anno_dirname = os.path.join(us_data_folder, "preprocessed_kpts/annotations_48/")
+        loader_func = USKptsNPZ
+        train_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_train_filenames.txt'
+        val_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_val_filenames.txt'
+        test_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_test_filenames.txt'
+        frame_selection_mode = None
+        nb_classes, closed_contour = 48, False
 
     else:
         raise NotImplementedError("Can't use dataset {}.".format(ds_name))

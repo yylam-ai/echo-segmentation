@@ -51,7 +51,8 @@ class USKptsNPZ(USKpts):
         KP_COORDS = []
         if self.anno_dir is not None:
             for fname in img_list:
-                kpts = np.load(os.path.join(self.anno_dir, fname.replace("png", "npz")), allow_pickle=True)["kpts"]
+                path = os.path.join(self.anno_dir, fname.replace("png", "npz"))
+                kpts = np.load(path, allow_pickle=True)["kpts"]
                 KP_COORDS.append(kpts)
             KP_COORDS = np.array(KP_COORDS).swapaxes(0, 1)
         return KP_COORDS

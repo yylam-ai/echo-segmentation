@@ -136,6 +136,8 @@ _C.INF.MODE = 'folder_sequence'
 _C.INF.WEIGHTS = ''
 # input file or folder for the images
 _C.INF.INPUT = ''
+# input folder for the images
+_C.INF.INPUT_DIR = ''
 # output folder to save the output images
 _C.INF.OUTPUT = ''
 

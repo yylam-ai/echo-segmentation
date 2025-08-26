@@ -43,11 +43,11 @@ def load_model(cfg:CfgNode, is_gpu: bool = True, device=torch.device("cpu"), kpt
         model.output_type = 'img2kpts'
 
     elif model_name == 'CNNGCN':
-        model = CNN_GCN(kpt_channels=2, gcn_channels=[16, 32, 32, 48], backbone=backbone, num_kpts=num_kpts, is_gpu=is_gpu)
+        model = CNN_GCN(kpt_channels=2, gcn_channels=[16, 32, 32, 48], backbone=backbone, num_kpts=num_kpts, is_gpu=is_gpu, device=device)
         model.output_type = 'img2kpts'
 
     elif model_name == 'CNNGCNV2':
-        model = CNN_GCN(kpt_channels=2, gcn_channels=[4, 4, 8, 8, 8, 16, 16, 16], backbone=backbone, num_kpts=num_kpts, is_gpu=is_gpu)
+        model = CNN_GCN(kpt_channels=2, gcn_channels=[4, 4, 8, 8, 8, 16, 16, 16], backbone=backbone, num_kpts=num_kpts, is_gpu=is_gpu, device=device)
         model.output_type = 'img2kpts'
 
     elif model_name == 'CNNGCNV3':
