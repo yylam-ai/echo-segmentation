@@ -283,7 +283,6 @@ class EchonetEvaluator(DatasetEvaluator):
         
         img = data["img"]
         keypoints = data["kpts"]
-        print("keypoints:", keypoints)
 
         # --- START OF FIX ---
         # If image data is 4D (H, W, C, num_frames), select the first frame.
@@ -305,7 +304,6 @@ class EchonetEvaluator(DatasetEvaluator):
         keypoints_prediction = self._dataset.denormalize_pose(keypoints_prediction, img)
         keypoints = self._dataset.denormalize_pose(keypoints, img)
 
-        print("keypoints_prediction:", keypoints_prediction)
         plot_kpts_pred_and_gt(fig, img, gt_kpts=keypoints, pred_kpts=keypoints_prediction,
                               kpts_info=self._dataset.kpts_info, closed_contour=self._dataset.kpts_info['closed_contour'])
 

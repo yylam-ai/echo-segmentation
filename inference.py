@@ -1,226 +1,296 @@
 import os
-import numpy as np
-import pickle
-from utils.utils_plot import plot_inference_movie
 import torch
-from typing import List, Dict, Tuple
-import torchvision.transforms as transforms
+import argparse
+import pickle
+import numpy as np
 from PIL import Image
+from torch.utils.data import DataLoader
+from scipy.special import softmax
+from fvcore.common.config import CfgNode
 
-
+from engine.loops import validate
 from engine.checkpoints import load_trained_model
-from utils.utils_data import load_sequence_as_npy, load_image_as_npy, transform_image_sequence_to_tensor
+from evaluation.EchonetEvaluator import EchonetEvaluator
+from datasets import datas, load_dataset
+from utils.utils_files import to_numpy
 from config.defaults import cfg_costum_setup, default_argument_parser,overwrite_eval_cfg
 
+import pickle
+import os
+import matplotlib.pyplot as plt
+import cv2  # Using OpenCV to read images, as it's used in the target script
+from collections import defaultdict
 
-########################################### model ##############################################
-def load_model_from_weights(weight_file:str = None) -> torch.nn.Module:
-    model, _, _ = load_trained_model(weight_file, load_dataset_from_checkpoint=False)
+view = 'A2C'
+dataset_name = f'HMC_QU_{view}_48_multi_kp_snake_inference'
+output_pickle_path = f'complete_HMC_QU/{view}/inference/48_multi_kp_snake/inference_output.pkl'
+base_image_dir = f'complete_HMC_QU/{view}/preprocessed_kpts/frames'
+
+#change this
+weights_path = 'experiments/HMC_QU/A2C/logs/HMC_QU_A2C_48_multi_kp_snake/CNNGCN/mobilenet2/905125824/weights_HMC_QU_A2C_48_multi_kp_snake_CNNGCN_best_kptsErr.pth'
+
+
+def get_subject_key_from_filename(filename):
+    """
+    Derives a subject key (e.g., 'ES00043_CH2_1.npy') from a frame filename
+    (e.g., 'ES00043_CH2_1_5.png').
+    It assumes the frame number is the last part after an underscore.
+    """
+    # Remove the file extension (.png)
+    base_name = os.path.splitext(filename)[0]
+    # Split by the last underscore to separate the frame number
+    subject_part = base_name.rsplit('_', 1)[0]
+    # Return the subject part with the desired .npy extension
+    return f"{subject_part}.npy"
+
+
+def create_inference_pickle(source_file, image_dir, output_file):
+    """
+    Loads data from the source pickle, processes it, and saves it in a new
+    format compatible with the second script.
+    """
+    # --- 1. Load the source data ---
+    try:
+        with open(source_file, "rb") as f:
+            source_data = pickle.load(f)
+        print(f"Successfully loaded data from {source_file}")
+        print(f"Found data for {len(source_data)} total frames.")
+    except FileNotFoundError:
+        print(f"Error: The file was not found at '{source_file}'")
+        return
+    except Exception as e:
+        print(f"An error occurred while loading the pickle file: {e}")
+        return
+
+    # --- 2. Process and group the data ---
+    # Use defaultdict to easily create lists for new subjects
+    grouped_data = defaultdict(lambda: {'kpts_pred': [], 'imgs': []})
+
+    print("Processing and grouping data...")
+    for i, (key, value) in enumerate(source_data.items()):
+        
+        filename = value.get('data_path_from_root')
+        if not filename:
+            print(f"Warning: 'data_path_from_root' not found for key {key}. Skipping.")
+            continue
+            
+        image_path = os.path.join(image_dir, filename)
+
+        # Check if the image file exists
+        if not os.path.exists(image_path):
+            print(f"Warning: Image not found at '{image_path}'. Skipping.")
+            continue
+
+        # Load the image using OpenCV
+        try:
+            # cv2.imread loads the image as a NumPy array in BGR format
+            img = cv2.imread(image_path)
+            if img is None:
+                raise ValueError("Image could not be read.")
+            height, width, _ = img.shape
+        except Exception as e:
+            print(f"Error loading image {image_path}: {e}. Skipping.")
+            continue
+
+        # Get predicted keypoints (normalized)
+        predicted_kpts_normalized = value['keypoints_prediction']
+
+        # Scale keypoints to image pixel dimensions
+        pred_x = predicted_kpts_normalized[:, 0] * width
+        pred_y = predicted_kpts_normalized[:, 1] * height
+        
+        # Combine back into a (N, 2) array
+        predicted_kpts_pixels = np.vstack((pred_x, pred_y)).T
+
+        # Get the subject key for grouping
+        subject_key = get_subject_key_from_filename(filename)
+
+        # Append the image and keypoints to the correct subject group
+        grouped_data[subject_key]['imgs'].append(img)
+        grouped_data[subject_key]['kpts_pred'].append(predicted_kpts_pixels)
+        
+        if (i + 1) % 100 == 0:
+            print(f"  Processed {i+1}/{len(source_data)} frames...")
+
+    print(f"Processing complete. Found {len(grouped_data)} unique subjects.")
+
+    # --- 3. Save the new data structure to the output pickle file ---
+    # Convert defaultdict back to a regular dict for saving
+    output_data = dict(grouped_data)
+    
+    try:
+        with open(output_file, "wb") as f:
+            pickle.dump(output_data, f)
+        print(f"Successfully created and saved the new inference file to '{output_file}'")
+    except Exception as e:
+        print(f"An error occurred while saving the new pickle file: {e}")
+
+
+def sliding():
+    mode = 'sliding_window'
+
+########################################
+########################################
+# Main
+########################################
+########################################
+def eval_trained_model(model: torch.nn.Module, cfg: CfgNode, ds: datas,
+                       basedir: str, basename: str, device: torch.device, batch_size: int, num_workers: int, num_examples_to_plot: int):
+
+    # Load model:
+    model = model.to(device)
+    model_name = cfg.MODEL.NAME
+
+    # Get dataloaders
+    testloader = torch.utils.data.DataLoader(ds.testset,
+                                              batch_size=batch_size,
+                                              shuffle=False,
+                                              num_workers=num_workers,
+                                              pin_memory=True
+                                              )
+
+    # # run test:
+    test_losses, test_outputs, test_inputs = validate(mode='test',
+                                                      epoch=1,
+                                                      loader=testloader,
+                                                      model=model,
+                                                      device=device,
+                                                      criterion=None)
+
+    test_loss = test_losses["main"].avg
+    dataset_info = dataset_name
+    out_directory = os.path.join(basedir, "{}_eval_on_{}/".format(basename, dataset_info))
+
+    if not os.path.exists(out_directory):
+        os.makedirs(out_directory)
+    with open(os.path.join(out_directory,"eval_config.yaml"), "w") as f:
+        f.write(cfg.dump())   # save config to file
+    # frames_info_file = pd.read_csv(ds.testset.echonet_frame_info_csvfile, index_col=0)
+    # frames_info_file = frames_info_file[frames_info_file.Split == "TEST"]
+
+    evaluator = EchonetEvaluator(dataset=ds.testset, tasks=["ef"], output_dir=out_directory)
+    evaluator.process(test_inputs, test_outputs)
+    evaluator.evaluate()
+    evaluator.plot(num_examples_to_plot=min(num_examples_to_plot, len(test_outputs)))
+
+    print(" ** test loss: {}".format(test_loss))
+    # compute_stats(total_filenames, total_output_guiding, total_gt_guiding, textfilename=textfilename)
+
+def eval_sliding_window(model:torch.nn.Module, cfg: CfgNode, ds: datas, device: torch.device, basedir: str, basename: str,):
+    g = ds.testset
+    window_size = 16
+    frame_step = 2
+    predictions = dict()
+
+    # !!!
     model.eval()
-    return model
 
-def run_inference(model:torch.nn.Module, device:torch.device, output_directory:str, data:np.ndarray = None, name:str ='sample') -> Dict:
+    for case_index in range(len(g)):
+        prediction = dict()
+        case_data = g.get_img_and_kpts(index=case_index)
+        all_frames = case_data["img"]
+        num_frames_in_case = all_frames.shape[-1]
+        frame_size = all_frames.shape[:2]
+        data_path_from_root = case_data["img_path"].replace(g.img_folder, "")
+        prediction["ef_prediction"], prediction["sd_prediction"], prediction["keypoints_prediction"] = [], [], []
+        prediction["data_path_from_root"] = data_path_from_root
+        prediction["ef"] = case_data["ef"]
+        prediction["sd"] = np.asarray([case_data["index_frame1"], case_data["index_frame2"]])
 
-    data = [data]
-    if model.output_type == 'seq2ef':
-        outputs = seq2ef(model, data, device)
-        outputs['ef_pred'] = outputs['ef_pred'].cpu().detach().numpy()[0]
+        #for ii in range(num_frames_in_case - window_size * frame_step):
+        for ii in range(0, num_frames_in_case - window_size * frame_step, window_size * frame_step):
+        #for ii in list(np.random.randint(num_frames_in_case - window_size * frame_step, size=10)):
+            indices = list(range(ii, ii + window_size * frame_step, frame_step))
+            #indices = list(range(16))
+            img = all_frames[:, :, :, indices]
+            # image norm:
+            resized_img = torch.zeros([img.shape[2], g.input_size, g.input_size, img.shape[3]])
+            for idx in range(img.shape[3]):
+                img_slice = img[:, :, :, idx]
+                img_slice = Image.fromarray(np.uint8(img_slice))
+                img_slice = g.basic_transform(img_slice)
+                resized_img[:, :, :, idx] = img_slice
+            img = resized_img
 
-    elif model.output_type == 'img2kpts':
-        outputs = img2kpts(model, data, device)
-        outputs['kpts_pred'] = outputs['kpts_pred'].cpu().detach().numpy()
-        outputs['imgs'] = outputs['imgs'].cpu().detach().numpy()
+            #img = [g.basic_transform(Image.fromarray(np.uint8(img[:, :, :, k]))) for k in range(window_size)]
+            #img = torch.stack(img)
+            #img = torch.reshape(img, (1, 3, window_size, frame_size[0], frame_size[1]))
+            img = img.unsqueeze(dim=0)
+            img = img.to(device)
+            ef_pred, kpts_pred, sd_pred = model(img)
+            to_numpy(img)
+            prediction["ef_prediction"].append(g.denormalize_ef(to_numpy(ef_pred)[0][0]))
+            # fix code duplication, taken from EchoNetEvaluator
+            sd_pred = np.argmax(softmax(to_numpy(sd_pred)[0]), axis=0)  # convert to logits format, same as gt
+            prediction["sd_prediction"].append(g.denormalize_sd(sd_pred))
+            prediction["keypoints_prediction"].append(to_numpy(kpts_pred)[0])
+            #
 
-    elif model.output_type == 'seq2ef&kpts':
-        outputs = seq2ef_kpts(model,data,device)
-        outputs['kpts_pred'] = outputs['kpts_pred'].cpu().detach().numpy()[0]
-        outputs['ef_pred'] = outputs['ef_pred'].cpu().detach().numpy()[0]
+        prediction["ef_mean_prediction"] = np.mean(np.array(prediction["ef_prediction"]))
+        prediction["mEFerr"] = np.abs(prediction["ef_mean_prediction"] - prediction["ef"])
+        if case_index % 10 == 0:
+            print("done running sliding window ({} iterations) for case {} [{}/{}].  Pred ef={}, ef={},   mEFerr={}".
+                  format(num_frames_in_case - window_size, data_path_from_root, case_index, len(g),
+                         prediction["ef_mean_prediction"], prediction["ef"], prediction["mEFerr"]))
+        predictions[data_path_from_root] = prediction
 
-    elif model.output_type == 'seq2ef&kpts&sd':
-        outputs = seq2ef_kpts_sd(model, data, device)
-        outputs['kpts_pred'] = outputs['kpts_pred'].cpu().detach().numpy()[0]
-        outputs['ef_pred'] = outputs['ef_pred'].cpu().detach().numpy()[0]
-        outputs['sd_pred'] = outputs['sd_pred'].cpu().detach().numpy()[0]
-    else:
-        raise NotImplementedError("Forward method to model type {} is not supported..".format(model.output_type))
+    print("done eval")
+    all_ef_predictions = np.asarray([prediction[1]["ef_mean_prediction"] for prediction in predictions.items()])
+    all_ef = np.asarray([prediction[1]["ef"] for prediction in predictions.items()])
+    total_mEFerr = np.mean(np.abs(all_ef - all_ef_predictions))
+    print("total EF error for test set: {}".format(total_mEFerr))
+    dataset_info = dataset_name
+    out_directory = os.path.join(basedir, "{}_eval_on_{}/".format(basename, dataset_info))
+    if not os.path.exists(out_directory):
+        os.makedirs(out_directory)
 
-    anim = plot_inference_movie(outputs['imgs'],outputs['kpts_pred'],input_size=512,metric_name='Name',value = name)
-    output_filname = name+".gif"
-    out_directory = output_directory
-    gifname = os.path.join(out_directory, output_filname)
-    anim.save(gifname, writer='imagemagick', fps=10)
-    return outputs
+    with open(os.path.join(out_directory,"eval_config.yaml"), "w") as f:
+        f.write(cfg.dump())   # save config to file
+
+    evaluator = EchonetEvaluator(dataset=ds.testset, tasks=["ef"], output_dir=out_directory)
+    fig = evaluator._plot_ef_scatters(ef=all_ef, ef_prediction=all_ef_predictions)
+    file_path = os.path.join(out_directory, "scatter_plot_echonet_sliding_window_OVERLAP.png")
+    fig.savefig(file_path)
+    file_path = os.path.join(out_directory, "echonet_sliding_window_predictions_OVERLAP.npz")
+    np.savez(file_path, predictions=predictions)
+    print("predictions were saved to {}".format(file_path))
 
 
-def seq2ef(model: torch.nn, data: List, device: torch.device) -> Dict:
-
-    imgs = data[0].to(device)
-    ef_pred = torch.squeeze(model(imgs), 1)
-    outputs = {"ef_pred": ef_pred, "imgs": imgs}
-
-    return outputs
-
-def img2kpts(model: torch.nn, data: List, device: torch.device) -> Dict:
-
-    imgs = data[0].to(device)
-    # print('images shape:', imgs.shape)
-    model.to(device)
-    kpts_pred = model(imgs)
-    # print("kpts_pred shape:", kpts_pred.shape)
-    outputs = {"kpts_pred": kpts_pred, "imgs": imgs}
-
-    return outputs
-
-def seq2ef_kpts(model: torch.nn, data: List, device: torch.device) -> Dict:
-
-    imgs= data[0].to(device)
-    ef_pred, kpts_pred = model(imgs)
-    ef_pred = torch.squeeze(ef_pred, 1)
-    batch_size = kpts_pred.shape[0]
-    kpts_pred = torch.reshape(kpts_pred, (batch_size, 40, 2, 2))
-    outputs = {"kpts_pred": kpts_pred, "ef_pred": ef_pred, "imgs": imgs}
-
-    return outputs
-
-def seq2ef_kpts_sd(model: torch.nn, data: List, criterion: torch.nn, device: torch.device) -> Dict:
-
-    imgs = data[0].to(device)
-    ef_pred, kpts_pred, sd_pred = model(imgs)
-    ef_pred = torch.squeeze(ef_pred, 1)
-    batch_size = kpts_pred.shape[0]
-    kpts_pred = torch.reshape(kpts_pred, (batch_size, 40, 2, 2))
-    outputs = {"kpts_pred": kpts_pred, "ef_pred": ef_pred, "sd_pred": sd_pred, "imgs": imgs}
-
-    return outputs
-
-########################################### load ##############################################
-
-def get_filenames_from_folder(image_folder:str) -> List:
-    image_list = []
-    for (dirpath,dirnames,filenames) in os.walk(image_folder):
-        image_list =[dirpath+name for name in filenames]
-    return image_list
 
 if __name__ == '__main__':
     args = default_argument_parser()
     cfg_eval = cfg_costum_setup(args)
-
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(device)
-    weights = cfg_eval.INF.WEIGHTS
-    mode = cfg_eval.INF.MODE
-    output_directory =cfg_eval.INF.OUTPUT
-    input = cfg_eval.INF.INPUT
-    input_dir = cfg_eval.INF.INPUT_DIR
-    model = load_model_from_weights(weights)
+    model, cfg_model, _ = load_trained_model(weights_filename=weights_path)
+    cfg = overwrite_eval_cfg(cfg_model,cfg_eval)
+    
+    model = model.to(device)
+    basedir = os.path.dirname(weights_path)
+    basename = os.path.splitext(os.path.basename(weights_path))[0]
 
-    if input_dir:
-        inference_output = {}
-        file_list = os.listdir(input_dir)
-        input_size = 224
+    if cfg.EVAL.MODE == 'normal':
+        ds = load_dataset(ds_name=dataset_name, input_transform=None, input_size=cfg.EVAL.INPUT_SIZE, num_frames=cfg.NUM_FRAMES)
+        eval_trained_model(model=model, cfg=cfg, ds=ds,
+                           basedir=basedir,
+                           basename=basename,
+                           device=device,
+                           batch_size=cfg.EVAL.BATCH_SIZE,
+                           num_workers=cfg.EVAL.NUM_WORKERS,
+                           num_examples_to_plot=cfg.EVAL.EXAMPLES_TO_PLOT
+                           )
+        out_directory = os.path.join(basedir, "{}_eval_on_{}/".format(basename, dataset_name))
+        source_pickle_path = f'{out_directory}/echonet_predictions.pkl'
 
-        # 2. Create the same transformation pipeline as used in eval.py
-        #    This typically includes resizing and converting to a tensor.
-        transform = transforms.Compose([
-            transforms.Resize((input_size, input_size)),
-            transforms.ToTensor(),
-            # Add transforms.Normalize if your model was trained with it.
-        ])
+        create_inference_pickle(source_pickle_path, base_image_dir, output_pickle_path)
 
-        for i, f in enumerate(file_list):
-            print(f"Inferencing: {i+1}/{len(file_list)}")
-            npz_file = os.path.join(input_dir, f)
-            
-            # Assuming the .npz file contains a single array of images (N, H, W, C)
-            # If the key is named, use data['arr_0'] or the correct key.
-            original_imgs_np = np.load(npz_file)
 
-            # 3. Apply the transformation to each frame individually
-            transformed_frames = []
-            for frame_idx in range(original_imgs_np.shape[0]):
-                # Convert numpy frame to PIL Image
-                frame_np = original_imgs_np[frame_idx]
-                # Handle single-channel (grayscale) vs 3-channel images
-                if frame_np.shape[2] == 1:
-                    frame_np = frame_np.squeeze(axis=2) # (H, W, 1) -> (H, W)
-                
-                frame_pil = Image.fromarray(frame_np)
-                
-                # Apply the transform
-                transformed_frame = transform(frame_pil)
-                transformed_frames.append(transformed_frame)
-            
-            # Stack frames into a single tensor and add a batch dimension
-            data_tensor = torch.stack(transformed_frames).unsqueeze(0) # Shape: (1, N, C, H, W)
-            # The model likely expects (N, C, H, W), so let's adjust if needed.
-            # Based on your `img2kpts` function, it seems to process a batch of images, not a sequence.
-            # Let's reshape to (NumFrames, C, H, W)
-            data_tensor = torch.stack(transformed_frames).to(device) # Shape: (N, C, H, W)
+    elif cfg.EVAL.MODE == 'sliding_window':
+        ds = load_dataset(ds_name="sliding_window", input_transform=None, input_size=cfg.EVAL.INPUT_SIZE, num_frames=cfg.NUM_FRAMES)
+        #ds = load_dataset(ds_name="echonet_random", input_transform=None, input_size=train_params.input_size, num_frames=16)
+        eval_sliding_window(model=model,cfg=cfg, ds=ds, device=device,
+                            basedir=basedir,
+                            basename=basename,
+                            )
 
-            inference_output[f] = {}
 
-            # Run inference on the correctly preprocessed tensor
-            outputs = img2kpts(model, [data_tensor], device)
-            kpts_norm = outputs['kpts_pred'].cpu().detach().numpy()
-            
-            # The 'imgs' from the output are the transformed tensors, not the originals
-            imgs_tensor_transformed = outputs['imgs'].cpu().detach().numpy()
-
-            # 4. Scale normalized coords by the MODEL'S INPUT SIZE, not the original image size
-            kpts_scaled = kpts_norm.copy()
-            kpts_scaled[..., 0] *= input_size   # x
-            kpts_scaled[..., 1] *= input_size   # y
-            
-            # Store the original images and the scaled keypoints
-            inference_output[f]['imgs'] = original_imgs_np # Store original for visualization
-            inference_output[f]['kpts_pred'] = kpts_scaled
-
-        # --- END: MODIFIED CODE ---
-
-        os.makedirs(output_directory, exist_ok=True)
-
-        with open(f"{output_directory}/inference_output.pkl", "wb") as f:
-            pickle.dump(inference_output, f)
-    else:
-        if 'single' in mode:
-            file = input
-            if not os.path.exists(file) & os.path.isfile(file):
-                raise FileNotFoundError(file)
-
-            if mode == 'single_image':
-                image = load_image_as_npy(file)
-                tensor = transform_image_sequence_to_tensor(image,device)
-
-            elif mode == 'single_sequence':
-                sequence = load_sequence_as_npy(file)
-                tensor = transform_image_sequence_to_tensor(sequence,device)
-            else:
-                raise NotImplementedError("Mode {} is not supported..".format(mode))
-
-            run_inference(model,device,output_directory,tensor, file.split('/')[-1][:-4])
-
-        elif 'folder' in mode:
-            if not os.path.isdir(input):
-                raise 'Path is not a directory'
-
-            image_files = get_filenames_from_folder(input)
-            for file in image_files:
-                if not os.path.exists(file):
-                    raise FileNotFoundError(file)
-                if mode == 'folder_image':
-                    image = load_image_as_npy(file)
-                    tensor = transform_image_sequence_to_tensor(image,device)
-
-                elif mode == 'folder_sequence':
-                    sequence = load_sequence_as_npy(file)
-                    if len(sequence[0]) > 100:
-                        sequence = sequence[:100]
-                    tensor = transform_image_sequence_to_tensor(sequence,device)
-                else:
-                    raise NotImplementedError("Mode {} is not supported..".format(mode))
-
-                print(file.split('/')[-1][:-4])
-                run_inference(model,device,output_directory,tensor, file.split('/')[-1][:-4])
-
-        else:
-            raise NotImplementedError("Mode {} is not supported..".format(mode))

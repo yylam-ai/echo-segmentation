@@ -32,7 +32,7 @@ class USKpts(data.Dataset):
         filenames_list (str): text file or list containing case/frame names in the dataset
         transform (A.core.composition.Compose) Image transfrom for augmentation based on albumentations
     """
-    def __init__(self, dataset_config: Dict, filenames_list: str = None, transform: A.core.composition.Compose = None):
+    def __init__(self, dataset_config: Dict, filenames_list: str = None, transform: A.core.composition.Compose = None, inference_mode = False):
 
         self.img_folder = dataset_config["img_folder"]
         self.transform = transform

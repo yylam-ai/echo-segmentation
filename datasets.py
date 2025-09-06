@@ -17,7 +17,7 @@ class datas(object):
     A simple class to hold the train/val/test dataset objects.
     """
     def __init__(self, loader_func: USKpts, dataset_config: Dict, input_transform: A.core.composition.Compose,
-                 train_filenames_list: str, val_filenames_list: str, test_filenames_list: str):
+                 train_filenames_list: str, val_filenames_list: str, test_filenames_list: str, inference_mode: bool = False):
         self.loader_func = loader_func
         self.input_transform = input_transform
 
@@ -67,7 +67,7 @@ def load_dataset(ds_name: str, input_transform: A.core.composition.Compose = Non
         copy_train_data(master_root_path=CONST.US_MultiviewData_MASTER, host_root_path=us_data_folder, folder_path_from_root="preprocessed/40/")
 
     print('ds_name:', ds_name)
-
+    inference_mode = False
     if ds_name == 'apical':     # 427 + 107 = 534 examples
         img_dirname = os.path.join(us_data_folder,  "apical/frames/")  #"/shared-data5/MultiView/apical/movies/"  #"/shared-data5/MultiView/apical/frames/"
         anno_dirname = os.path.join(us_data_folder,  "apical/annotations/")    #os.path.join(us_data_folder,  "apical/annotations_movies/"    #os.path.join(us_data_folder,  "apical/annotations/"
@@ -197,6 +197,47 @@ def load_dataset(ds_name: str, input_transform: A.core.composition.Compose = Non
         test_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_test_filenames.txt'
         frame_selection_mode = None
         nb_classes, closed_contour = 48, False
+    
+    elif ds_name == 'HMC_QU_A2C_48_multi_kp_snake': 
+        img_dirname = os.path.join(us_data_folder, "preprocessed_kpts/frames/")
+        anno_dirname = os.path.join(us_data_folder, "preprocessed_kpts/annotations_48_multi_kp_snake/")
+        loader_func = USKptsNPZ
+        train_filenames_list = 'complete_HMC_QU/A2C/preprocessed_kpts/filenames/A2C_train_filenames.txt'
+        val_filenames_list = 'complete_HMC_QU/A2C/preprocessed_kpts/filenames/A2C_val_filenames.txt'
+        test_filenames_list = 'complete_HMC_QU/A2C/preprocessed_kpts/filenames/A2C_test_filenames.txt'
+        frame_selection_mode = None
+        nb_classes, closed_contour = 48, False
+
+    elif ds_name == 'HMC_QU_A4C_48_multi_kp_snake': 
+        img_dirname = os.path.join(us_data_folder, "preprocessed_kpts/frames/")
+        anno_dirname = os.path.join(us_data_folder, "preprocessed_kpts/annotations_48_multi_kp_snake/")
+        loader_func = USKptsNPZ
+        train_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_train_filenames.txt'
+        val_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_val_filenames.txt'
+        test_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_test_filenames.txt'
+        frame_selection_mode = None
+        nb_classes, closed_contour = 48, False
+    
+    elif ds_name == 'HMC_QU_A2C_48_multi_kp_snake_inference': 
+        img_dirname = os.path.join(us_data_folder, "preprocessed_kpts/frames/")
+        anno_dirname = None
+        loader_func = USKptsNPZ
+        train_filenames_list = 'complete_HMC_QU/A2C/preprocessed_kpts/filenames/A2C_all_filenames.txt'
+        val_filenames_list = 'complete_HMC_QU/A2C/preprocessed_kpts/filenames/A2C_all_filenames.txt'
+        test_filenames_list = 'complete_HMC_QU/A2C/preprocessed_kpts/filenames/A2C_all_filenames.txt'
+        frame_selection_mode = None
+        nb_classes, closed_contour = 48, False
+
+    elif ds_name == 'HMC_QU_A4C_48_multi_kp_snake_inference':
+        # inference only 
+        img_dirname = os.path.join(us_data_folder, "preprocessed_kpts/frames/")
+        anno_dirname = None
+        loader_func = USKptsNPZ
+        train_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_all_filenames.txt'
+        val_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_all_filenames.txt'
+        test_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_all_filenames.txt'
+        frame_selection_mode = None
+        nb_classes, closed_contour = 48, False
 
     else:
         raise NotImplementedError("Can't use dataset {}.".format(ds_name))
@@ -205,7 +246,7 @@ def load_dataset(ds_name: str, input_transform: A.core.composition.Compose = Non
                       "num_kpts": nb_classes, "closed_contour": closed_contour, "num_frames": num_frames, "frame_selection_mode": frame_selection_mode}
 
     ds = datas(loader_func=loader_func, dataset_config=dataset_config, input_transform=input_transform,
-               train_filenames_list=train_filenames_list, val_filenames_list=val_filenames_list, test_filenames_list=test_filenames_list)
+               train_filenames_list=train_filenames_list, val_filenames_list=val_filenames_list, test_filenames_list=test_filenames_list, inference_mode=inference_mode)
 
     if ds.trainset is not None and ds.testset is not None:
             print("loading dataset : {}.. number of train examples is {}, number of val examples is {}, number of test examples is {}."

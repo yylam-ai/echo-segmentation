@@ -49,7 +49,7 @@ def parse_args():
     """Parses command-line arguments."""
     parser = argparse.ArgumentParser(description="Preprocess ultrasound videos for keypoint extraction.")
     parser.add_argument('-v', '--view', type=str, default='A4C')
-    parser.add_argument('--annotation_suffix', type=str, default='48')
+    parser.add_argument('--annotation_suffix', type=str, default='48_multi_kp_snake')
     parser.add_argument('-i', '--input_dir', type=str, default='complete_HMC_QU',
                         help="Path to the directory containing 'FileList.csv', 'VolumeTracings.csv', and 'Videos/' folder.")
     parser.add_argument('-o', '--output_dir', type=str,
