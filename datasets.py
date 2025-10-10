@@ -238,6 +238,16 @@ def load_dataset(ds_name: str, input_transform: A.core.composition.Compose = Non
         test_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_all_filenames.txt'
         frame_selection_mode = None
         nb_classes, closed_contour = 48, False
+    
+    elif ds_name == 'HMC_QU_A4C_48_from_GT': 
+        img_dirname = os.path.join(us_data_folder, "preprocessed_kpts/frames/")
+        anno_dirname = os.path.join(us_data_folder, "preprocessed_kpts/annotations_48_from_GT/")
+        loader_func = USKptsNPZ
+        train_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_GT_train_filenames.txt'
+        val_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_GT_val_filenames.txt'
+        test_filenames_list = 'complete_HMC_QU/A4C/preprocessed_kpts/filenames/A4C_GT_test_filenames.txt'
+        frame_selection_mode = None
+        nb_classes, closed_contour = 48, False
 
     else:
         raise NotImplementedError("Can't use dataset {}.".format(ds_name))

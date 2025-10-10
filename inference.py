@@ -21,17 +21,17 @@ import matplotlib.pyplot as plt
 import cv2  # Using OpenCV to read images, as it's used in the target script
 from collections import defaultdict
 
-view = 'A2C'
+view = 'A4C'
 dataset_name = f'HMC_QU_{view}_48_multi_kp_snake_inference'
 output_pickle_path = f'complete_HMC_QU/{view}/inference/48_multi_kp_snake/inference_output.pkl'
 base_image_dir = f'complete_HMC_QU/{view}/preprocessed_kpts/frames'
 
 #change this
-weights_path = 'experiments/HMC_QU/A2C/logs/HMC_QU_A2C_48_multi_kp_snake/CNNGCN/mobilenet2/905125824/weights_HMC_QU_A2C_48_multi_kp_snake_CNNGCN_best_kptsErr.pth'
+weights_path = 'experiments/HMC_QU/A4C/logs/HMC_QU_A4C_48_multi_kp_snake/mobilenet2/905181023/weights_HMC_QU_A4C_48_multi_kp_snake_CNNGCN_best_kptsErr.pth'
 
 
 def get_subject_key_from_filename(filename):
-    """
+    """`
     Derives a subject key (e.g., 'ES00043_CH2_1.npy') from a frame filename
     (e.g., 'ES00043_CH2_1_5.png').
     It assumes the frame number is the last part after an underscore.
@@ -114,11 +114,24 @@ def create_inference_pickle(source_file, image_dir, output_file):
 
     print(f"Processing complete. Found {len(grouped_data)} unique subjects.")
 
-    # --- 3. Save the new data structure to the output pickle file ---
+    # --- 3. Convert lists to NumPy arrays ---
+    print("Converting lists to NumPy arrays...")
+    for subject_key in list(grouped_data.keys()):
+        # Stack the list of images into a single numpy array (e.g., shape: [num_frames, height, width, channels])
+        grouped_data[subject_key]['imgs'] = np.stack(grouped_data[subject_key]['imgs'], axis=0)
+        
+        # Do the same for keypoints (e.g., shape: [num_frames, num_keypoints, 2])
+        grouped_data[subject_key]['kpts_pred'] = np.stack(grouped_data[subject_key]['kpts_pred'], axis=0)
+    print("Conversion complete.")
+
+
+    # --- 4. Save the new data structure to the output pickle file ---
     # Convert defaultdict back to a regular dict for saving
     output_data = dict(grouped_data)
     
     try:
+        # Create the directory if it doesn't exist
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
         with open(output_file, "wb") as f:
             pickle.dump(output_data, f)
         print(f"Successfully created and saved the new inference file to '{output_file}'")
@@ -258,7 +271,16 @@ def eval_sliding_window(model:torch.nn.Module, cfg: CfgNode, ds: datas, device: 
 
 
 if __name__ == '__main__':
-    args = default_argument_parser()
+    # This is a simplified argument setup for demonstration.
+    # In a real scenario, you would pass arguments via the command line.
+    class Args:
+        config_file = ""
+        opts = []
+
+    args = Args()
+    # Manually set the evaluation mode for this example
+    args.opts = ['EVAL.MODE', 'normal']
+
     cfg_eval = cfg_costum_setup(args)
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -292,5 +314,3 @@ if __name__ == '__main__':
                             basedir=basedir,
                             basename=basename,
                             )
-
-
