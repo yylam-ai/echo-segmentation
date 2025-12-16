@@ -48,8 +48,8 @@ Output structure:
 def parse_args():
     """Parses command-line arguments."""
     parser = argparse.ArgumentParser(description="Preprocess ultrasound videos for keypoint extraction.")
-    parser.add_argument('-v', '--view', type=str, default='A4C')
-    parser.add_argument('--annotation_suffix', type=str, default='48_FROM_GT')
+    parser.add_argument('-v', '--view', type=str, default='A2C')
+    parser.add_argument('--annotation_suffix', type=str, default='48_multi_kp_snake')
     parser.add_argument('-i', '--input_dir', type=str, default='complete_HMC_QU',
                         help="Path to the directory containing 'FileList.csv', 'VolumeTracings.csv', and 'Videos/' folder.")
     parser.add_argument('-o', '--output_dir', type=str,
@@ -291,13 +291,13 @@ def preprocess_data(input_path, output_path, save_kpts, save_imgs, view, img_siz
                 if base_name not in unique_invalid:
                     f.write(item + '\n')
 
-    write_list_to_file(os.path.join(file_dir, f'{view}_GT_train_filenames.txt'), output_list_train)
-    write_list_to_file(os.path.join(file_dir, f'{view}_GT_val_filenames.txt'), output_list_val)
-    write_list_to_file(os.path.join(file_dir, f'{view}_GT_test_filenames.txt'), output_list_test)
+    write_list_to_file(os.path.join(file_dir, f'{view}_train_filenames.txt'), output_list_train)
+    write_list_to_file(os.path.join(file_dir, f'{view}_val_filenames.txt'), output_list_val)
+    write_list_to_file(os.path.join(file_dir, f'{view}_test_filenames.txt'), output_list_test)
     
-    write_list_to_file(os.path.join(file_dir, f'{view}_GT_cycle_train_filenames.txt'), output_list_train_cycle, is_cycle=True)
-    write_list_to_file(os.path.join(file_dir, f'{view}_GT_cycle_val_filenames.txt'), output_list_val_cycle, is_cycle=True)
-    write_list_to_file(os.path.join(file_dir, f'{view}_GT_cycle_test_filenames.txt'), output_list_test_cycle, is_cycle=True)
+    write_list_to_file(os.path.join(file_dir, f'{view}_cycle_train_filenames.txt'), output_list_train_cycle, is_cycle=True)
+    write_list_to_file(os.path.join(file_dir, f'{view}_cycle_val_filenames.txt'), output_list_val_cycle, is_cycle=True)
+    write_list_to_file(os.path.join(file_dir, f'{view}_cycle_test_filenames.txt'), output_list_test_cycle, is_cycle=True)
 
     with open(os.path.join(file_dir, f'{view}_invalid_filenames.txt'), 'w') as f:
         for name in sorted(list(unique_invalid)):

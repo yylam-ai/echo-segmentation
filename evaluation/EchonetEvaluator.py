@@ -1,3 +1,5 @@
+# EchonetEvaluator.py
+
 import numpy as np
 import copy
 import cv2
@@ -121,8 +123,6 @@ class EchonetEvaluator(DatasetEvaluator):
         if self._output_dir is not None:
             if not os.path.exists(self._output_dir):
                 os.makedirs(self._output_dir)
-            #file_path = os.path.join(self._output_dir, "echonet_predictions.npz")
-            #np.savez(file_path, predictions=predictions)
             file_path = os.path.join(self._output_dir, "echonet_predictions.pkl")
             with open(file_path, 'wb') as handle:
                 pickle.dump(predictions, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -134,7 +134,7 @@ class EchonetEvaluator(DatasetEvaluator):
         if self._verbose:
             self._logger.info("Evaluating predictions ...")
         self._results = OrderedDict()
-        tasks = self._tasks #or self._tasks_from_predictions(lvis_results)
+        tasks = self._tasks
         for task in sorted(tasks):
             if self._verbose:
                 self._logger.info("Preparing results in the EchoNet format for task {} ...".format(task))
@@ -146,6 +146,10 @@ class EchonetEvaluator(DatasetEvaluator):
                 res = self._eval_diastolic_systolic_predictions(predictions)
 
             self._results[task] = res
+        
+        # --- NEW: Save results to a text file ---
+        self._save_results_to_txt()
+        # -----------------------------------------
 
         # Copy so the caller can do whatever with results
         return copy.deepcopy(self._results)
@@ -163,7 +167,7 @@ class EchonetEvaluator(DatasetEvaluator):
             if "ef" in self._tasks:
                 keypoints_prediction = prediction["keypoints_prediction"] if "kpts" in self._tasks else None
                 sd_prediction = prediction["sd_prediction"] if "sd" in self._tasks else None
-                ax1 = fig.add_subplot(1, 1, 1)  #ax1 = fig.add_subplot(1, 2, 1)
+                ax1 = fig.add_subplot(1, 1, 1)
                 self._plot_EF_prediction(ax=ax1, data_path_from_root=prediction["data_path_from_root"],
                                          ef_prediction=prediction["ef_prediction"],
                                          keypoints_prediction=keypoints_prediction,
@@ -181,12 +185,6 @@ class EchonetEvaluator(DatasetEvaluator):
         return self._tasks
 
     def _eval_ejection_fraction_predictions(self, predictions: Dict) -> Dict:
-        """
-        Evaluate ejection_fraction predictions.
-        Args:
-            predictions (list[dict]): list of predictions from the model, as well as source EchoNet data
-        """
-
         if self._verbose:
             self._logger.info("Eval stats for Ejection Fraction")
 
@@ -200,50 +198,128 @@ class EchonetEvaluator(DatasetEvaluator):
             fig.suptitle("EF scatters for EchoNet test set, size={}".format(len(predictions)))
             fig.savefig(os.path.join(self._output_dir, "ef_scatters.jpg".format()))
 
-        return mEfERR
+        return {"mEfERR": mEfERR}
 
+    def _compute_oks(self, gt_kpts, pred_kpts, area):
+        """
+        Compute Object Keypoint Similarity (OKS).
+        OKS = exp(-d^2 / (2 * s^2 * k^2))
+        where:
+        - d is the Euclidean distance between the predicted keypoint and the corresponding ground truth
+        - s is the object scale (sqrt of the object segment area)
+        - k is a per-keypoint constant that controls falloff
+        """
+        # Using a constant k for all keypoints, a common practice when per-keypoint sigmas are not available.
+        k = 0.08  # This value can be tuned based on dataset characteristics.
+        
+        distances = np.linalg.norm(gt_kpts - pred_kpts, axis=1)
+        
+        # OKS calculation
+        oks = np.exp(-distances**2 / (2 * area * k**2))
+        return np.mean(oks)
 
     def _eval_keypoints_predictions(self, predictions: Dict) -> Dict:
         """
-        Evaluate keypoints predictions
-        Args:
-            predictions (list[dict]): list of predictions from the model
+        Evaluate keypoints predictions with mKptsERR, mAP (OKS-based), and PCKh@0.5.
         """
         if self._verbose:
             self._logger.info("Eval stats for keypoints")
 
         dist_pred_gt_kpts = []
+        all_oks = []
+        all_pck = []
+        
         num_kpts = self._dataset.num_kpts
         num_annotated_frames = 2 if "ef" in self._tasks else 1
-        for prediction in predictions.values():
-            dist_pred_gt_kpts.append(100 * match_two_kpts_set(prediction["keypoints"].reshape(num_kpts * num_annotated_frames, 2),
-                                                              prediction["keypoints_prediction"].reshape(num_kpts * num_annotated_frames, 2)))
-        mKptsERR = np.mean(np.stack(dist_pred_gt_kpts))
-        if self._verbose:
-            self._logger.info("Mean keypoints error is {}".format(mKptsERR))
 
-        return mKptsERR
+        for prediction in predictions.values():
+            gt_kpts_all_frames = prediction["keypoints"].reshape(num_kpts, 2, num_annotated_frames)
+            pred_kpts_all_frames = prediction["keypoints_prediction"].reshape(num_kpts, 2, num_annotated_frames)
+
+            for i in range(num_annotated_frames):
+                gt_kpts = gt_kpts_all_frames[:, :, i]
+                pred_kpts = pred_kpts_all_frames[:, :, i]
+
+                # Original metric
+                dist_pred_gt_kpts.append(100 * match_two_kpts_set(gt_kpts, pred_kpts))
+
+                # --- New Metrics Calculation ---
+                # 1. Calculate scale for PCK and OKS
+                x_min, y_min = gt_kpts.min(axis=0)
+                x_max, y_max = gt_kpts.max(axis=0)
+                bbox_w = x_max - x_min
+                bbox_h = y_max - y_min
+                
+                # Handle cases with no valid bounding box
+                if bbox_w == 0 or bbox_h == 0:
+                    # Cannot compute scale-dependent metrics, skip this frame for OKS/PCK
+                    continue
+
+                scale = np.sqrt(bbox_w * bbox_h)
+                area = bbox_w * bbox_h
+
+                # 2. PCKh@0.5
+                threshold = 0.5 * scale
+                distances = np.linalg.norm(gt_kpts - pred_kpts, axis=1)
+                correct_kpts = (distances < threshold).sum()
+                pck_for_frame = correct_kpts / num_kpts
+                all_pck.append(pck_for_frame)
+
+                # 3. OKS for mAP
+                oks_for_frame = self._compute_oks(gt_kpts, pred_kpts, area)
+                all_oks.append(oks_for_frame)
+
+        # --- Aggregate Metrics ---
+        mKptsERR = np.mean(np.stack(dist_pred_gt_kpts)) if dist_pred_gt_kpts else 0.0
+        pckh_05 = np.mean(all_pck) if all_pck else 0.0
+
+        # Calculate mAP@[.5:.95]
+        oks_thresholds = np.linspace(0.5, 0.95, 10)
+        aps = []
+        for thres in oks_thresholds:
+            # AP at a given threshold is the fraction of samples with OKS > threshold
+            ap = np.mean([1 if oks >= thres else 0 for oks in all_oks])
+            aps.append(ap)
+        mAP = np.mean(aps) if aps else 0.0
+
+        if self._verbose:
+            self._logger.info(f"Mean keypoints error (mKptsERR): {mKptsERR:.4f}")
+            self._logger.info(f"Percentage of Correct Keypoints (PCKh@0.5): {pckh_05:.4f}")
+            self._logger.info(f"Mean Average Precision (mAP@[.5:.95]): {mAP:.4f}")
+
+        return {"mKptsERR": mKptsERR, "PCKh@0.5": pckh_05, "mAP@[.5:.95]": mAP}
 
     def _eval_diastolic_systolic_predictions(self, predictions):
-        """
-        Evaluate frame labels for diastolic systolic predictions.
-        Args:
-            predictions (list[dict]): list of predictions from the model
-        """
         if self._verbose:
-            self._logger.info("Eval stats for keypoints")
+            self._logger.info("Eval stats for Diastolic/Systolic Frame Detection")
 
         dist_pred_gt_SD = []
         for prediction in predictions.values():
-            dist_pred_gt_SD.append(abs(prediction["sd"] - prediction["sd_prediction"]))     # FixMe
-        mKsdERR = np.mean(np.stack(dist_pred_gt_SD))
+            dist_pred_gt_SD.append(abs(prediction["sd"] - prediction["sd_prediction"]))
+        mSD_ERR = np.mean(np.stack(dist_pred_gt_SD))
         if self._verbose:
-            self._logger.info("Average Frame Distance is {}".format(mKsdERR))
+            self._logger.info("Average Frame Distance is {}".format(mSD_ERR))
 
-        return mKsdERR
+        return {"mSD_ERR": mSD_ERR}
+
+    def _save_results_to_txt(self):
+        """Saves all computed evaluation metrics to a text file."""
+        file_path = os.path.join(self._output_dir, "evaluation_results.txt")
+        with open(file_path, "w") as f:
+            f.write("--- Evaluation Results ---\n\n")
+            for task, results in self._results.items():
+                f.write(f"Task: {task.upper()}\n")
+                if isinstance(results, dict):
+                    for metric_name, value in results.items():
+                        f.write(f"  - {metric_name}: {value:.4f}\n")
+                else:
+                    # Fallback for single-value results
+                    f.write(f"  - Result: {results:.4f}\n")
+                f.write("\n")
+        if self._verbose:
+            self._logger.info(f"Evaluation results saved to {file_path}")
 
     def _plot_EF_prediction(self, ax, data_path_from_root, ef_prediction, keypoints_prediction=None, sd_prediction=None):
-
         datapoint_index = self._dataset.img_list.index(data_path_from_root)
         data = self._dataset.get_img_and_kpts(datapoint_index)
         img = data["img"]
@@ -298,7 +374,6 @@ class EchonetEvaluator(DatasetEvaluator):
             keypoints_prediction = keypoints_prediction[:, :, 0]
         # --- END OF FIX ---
         
-        # The rest of the function now works correctly with a 3D image and 2D keypoint arrays.
         keypoints = self._dataset.normalize_pose(keypoints, img)
         img = cv2.resize(img, dsize=(300, 300), interpolation=cv2.INTER_AREA)
         keypoints_prediction = self._dataset.denormalize_pose(keypoints_prediction, img)
@@ -307,7 +382,6 @@ class EchonetEvaluator(DatasetEvaluator):
         plot_kpts_pred_and_gt(fig, img, gt_kpts=keypoints, pred_kpts=keypoints_prediction,
                               kpts_info=self._dataset.kpts_info, closed_contour=self._dataset.kpts_info['closed_contour'])
 
-        #prediction_text = "Keypoints err: {:.2f}".format(np.mean(dist_pred_gt_kpts[img_index]))
         return fig
     
     def _plot_ef_scatters(self, ef: np.ndarray, ef_prediction: np.ndarray) -> plt.Figure:

@@ -1,3 +1,5 @@
+# eval.py
+
 import os
 import torch
 import argparse
@@ -7,6 +9,7 @@ from PIL import Image
 from torch.utils.data import DataLoader
 from scipy.special import softmax
 from fvcore.common.config import CfgNode
+import pprint # Import pprint for nice dictionary printing
 
 from engine.loops import validate
 from engine.checkpoints import load_trained_model
@@ -46,28 +49,6 @@ def eval_trained_model(model: torch.nn.Module, cfg: CfgNode, ds: datas,
                                                       model=model,
                                                       device=device,
                                                       criterion=None)
-    # # safe results
-
-    # results_to_save = {
-    #     'losses': test_losses,
-    #     'outputs': test_outputs,
-    #     'inputs': test_inputs
-    # }
-
-    # # Open a file in binary write mode ('wb')
-    # with open('test_results.pkl', 'wb') as f:
-    #     pickle.dump(results_to_save, f)
-
-    # load results
-    # with open('test_results.pkl', 'rb') as f:
-    #     loaded_results = pickle.load(f)
-
-    # test_losses = loaded_results['losses']
-    # test_outputs = loaded_results['outputs']
-    # test_inputs = loaded_results['inputs']
-    # print("Results loaded successfully!")
-
-    # print('test_outputs:', test_outputs)
 
     test_loss = test_losses["main"].avg
     dataset_info = cfg.EVAL.DATASET
@@ -77,16 +58,22 @@ def eval_trained_model(model: torch.nn.Module, cfg: CfgNode, ds: datas,
         os.makedirs(out_directory)
     with open(os.path.join(out_directory,"eval_config.yaml"), "w") as f:
         f.write(cfg.dump())   # save config to file
-    # frames_info_file = pd.read_csv(ds.testset.echonet_frame_info_csvfile, index_col=0)
-    # frames_info_file = frames_info_file[frames_info_file.Split == "TEST"]
 
-    evaluator = EchonetEvaluator(dataset=ds.testset, tasks=["ef"], output_dir=out_directory)
+    evaluator = EchonetEvaluator(dataset=ds.testset, tasks=["ef", "kpts", "sd"], output_dir=out_directory)
     evaluator.process(test_inputs, test_outputs)
-    evaluator.evaluate()
+    
+    evaluation_results = evaluator.evaluate()
+    print("\n" + "="*30)
+    print("      Evaluation Results")
+    print("="*30)
+    pprint.pprint(evaluation_results)
+    print("="*30 + "\n")
+    # -------------------------------------------------------------------------
+
     evaluator.plot(num_examples_to_plot=min(num_examples_to_plot, len(test_outputs)))
 
     print(" ** test loss: {}".format(test_loss))
-    # compute_stats(total_filenames, total_output_guiding, total_gt_guiding, textfilename=textfilename)
+
 
 def eval_sliding_window(model:torch.nn.Module, cfg: CfgNode, ds: datas, device: torch.device, basedir: str, basename: str,):
     g = ds.testset
@@ -109,11 +96,8 @@ def eval_sliding_window(model:torch.nn.Module, cfg: CfgNode, ds: datas, device: 
         prediction["ef"] = case_data["ef"]
         prediction["sd"] = np.asarray([case_data["index_frame1"], case_data["index_frame2"]])
 
-        #for ii in range(num_frames_in_case - window_size * frame_step):
         for ii in range(0, num_frames_in_case - window_size * frame_step, window_size * frame_step):
-        #for ii in list(np.random.randint(num_frames_in_case - window_size * frame_step, size=10)):
             indices = list(range(ii, ii + window_size * frame_step, frame_step))
-            #indices = list(range(16))
             img = all_frames[:, :, :, indices]
             # image norm:
             resized_img = torch.zeros([img.shape[2], g.input_size, g.input_size, img.shape[3]])
@@ -124,9 +108,6 @@ def eval_sliding_window(model:torch.nn.Module, cfg: CfgNode, ds: datas, device: 
                 resized_img[:, :, :, idx] = img_slice
             img = resized_img
 
-            #img = [g.basic_transform(Image.fromarray(np.uint8(img[:, :, :, k]))) for k in range(window_size)]
-            #img = torch.stack(img)
-            #img = torch.reshape(img, (1, 3, window_size, frame_size[0], frame_size[1]))
             img = img.unsqueeze(dim=0)
             img = img.to(device)
             ef_pred, kpts_pred, sd_pred = model(img)
@@ -136,7 +117,6 @@ def eval_sliding_window(model:torch.nn.Module, cfg: CfgNode, ds: datas, device: 
             sd_pred = np.argmax(softmax(to_numpy(sd_pred)[0]), axis=0)  # convert to logits format, same as gt
             prediction["sd_prediction"].append(g.denormalize_sd(sd_pred))
             prediction["keypoints_prediction"].append(to_numpy(kpts_pred)[0])
-            #
 
         prediction["ef_mean_prediction"] = np.mean(np.array(prediction["ef_prediction"]))
         prediction["mEFerr"] = np.abs(prediction["ef_mean_prediction"] - prediction["ef"])
@@ -194,10 +174,7 @@ if __name__ == '__main__':
 
     elif cfg.EVAL.MODE == 'sliding_window':
         ds = load_dataset(ds_name="sliding_window", input_transform=None, input_size=cfg.EVAL.INPUT_SIZE, num_frames=cfg.NUM_FRAMES)
-        #ds = load_dataset(ds_name="echonet_random", input_transform=None, input_size=train_params.input_size, num_frames=16)
         eval_sliding_window(model=model,cfg=cfg, ds=ds, device=device,
                             basedir=basedir,
                             basename=basename,
                             )
-
-
